@@ -15,15 +15,15 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 CHECKPOINT_FILE    = "checkpoint.json"
-AUTOSAVE_EVERY     = 50    # Simpan hasil sementara setiap N lagu
-REQUEST_DELAY      = 0.5   # Jeda antar request ke Spotify (detik)
+AUTOSAVE_EVERY     = 50    
+REQUEST_DELAY      = 0.5   
 
 # === YouTube Quota Management ===
-YOUTUBE_COST_PER_SEARCH = 100   # 1 search request = 100 units
-YOUTUBE_DAILY_QUOTA     = 10000 # Batas harian YouTube Data API v3
-YOUTUBE_SAFETY_MARGIN   = 0.85  # Berhenti saat 85% quota terpakai (= 8500 units)
+YOUTUBE_COST_PER_SEARCH = 100   
+YOUTUBE_DAILY_QUOTA     = 10000 
+YOUTUBE_SAFETY_MARGIN   = 0.85  
 YOUTUBE_MAX_REQUESTS    = int((YOUTUBE_DAILY_QUOTA * YOUTUBE_SAFETY_MARGIN) / YOUTUBE_COST_PER_SEARCH)
-YOUTUBE_DELAY           = 1.0   # Jeda antar request ke YouTube (detik)
+YOUTUBE_DELAY           = 1.0   
 
 def load_checkpoint():
     """Baca checkpoint terakhir jika ada, sehingga pipeline bisa dilanjutkan."""
@@ -59,7 +59,7 @@ def process_catalog(catalog_df):
     spotify = SpotifyExtractor(Config.SPOTIFY_CLIENT_ID, Config.SPOTIFY_CLIENT_SECRET)
     youtube = YouTubeExtractor(Config.YOUTUBE_API_KEY)
 
-    # Muat hasil sementara jika ada (dari auto-save sebelumnya)
+    
     spotify_results = []
     youtube_results = []
     if os.path.exists("spotify_raw.csv"):
@@ -69,14 +69,14 @@ def process_catalog(catalog_df):
         youtube_results = pd.read_csv("youtube_raw.csv").to_dict('records')
         logger.info(f"Loaded {len(youtube_results)} existing YouTube rows from youtube_raw.csv")
 
-    # Cek checkpoint: mulai dari lagu yang belum diproses
+    
     start_index = load_checkpoint()
     catalog_df = catalog_df.iloc[start_index:].reset_index(drop=True)
     logger.info(f"Processing {len(catalog_df)} remaining songs from catalog...")
     logger.info(f"YouTube quota limit: {YOUTUBE_MAX_REQUESTS} requests/day (safety margin {int(YOUTUBE_SAFETY_MARGIN*100)}%)")
 
-    youtube_request_count = 0          # Pelacak penggunaan quota YouTube
-    youtube_quota_exceeded = False     # Flag: matikan YouTube jika dapat 403
+    youtube_request_count = 0          
+    youtube_quota_exceeded = False     
 
     for i, row in catalog_df.iterrows():
         actual_index = start_index + i
@@ -89,13 +89,11 @@ def process_catalog(catalog_df):
             
         logger.info(f"[{actual_index+1}] Extracting: {title} by {artist} (ID: {song_id})")
 
-        # 1. Fetch Spotify Data dengan polite delay
         sp_data = spotify.search_song_metadata(song_id, title, artist, limit=1)
         if sp_data:
             spotify_results.extend(sp_data)
-        time.sleep(REQUEST_DELAY)  # ⏱️ Jeda sopan antar request Spotify
+        time.sleep(REQUEST_DELAY)  
 
-        # 2. Fetch YouTube Data — cek quota sebelum request
         if youtube_request_count < YOUTUBE_MAX_REQUESTS and not youtube_quota_exceeded:
             try:
                 yt_data = youtube.search_song_videos(song_id, title, artist, max_results=3)
@@ -111,14 +109,14 @@ def process_catalog(catalog_df):
                 else:
                     logger.error(f"   YouTube error: {yt_err}")
         elif youtube_quota_exceeded:
-            pass  # diam saja, tidak print warning tiap baris
+            pass 
         else:
             logger.warning(f"   ⚠️ YouTube safety limit ({YOUTUBE_MAX_REQUESTS} requests) tercapai.")
 
-        # Simpan checkpoint setiap lagu berhasil diproses
+   
         save_checkpoint(actual_index + 1, song_id)
 
-        # Auto-save hasil sementara setiap AUTOSAVE_EVERY lagu
+        
         if (i + 1) % AUTOSAVE_EVERY == 0:
             logger.info(f"Auto-saving progress at song {actual_index + 1}...")
             pd.DataFrame(spotify_results).to_csv("spotify_raw.csv", index=False)
@@ -137,9 +135,6 @@ if __name__ == "__main__":
     logger.info("Downloading catalog from Google Sheets...")
     catalog_df = pd.read_csv(url)
 
-    # Proses seluruh katalog (699 lagu)
-    # Uncomment baris di bawah jika ingin membatasi untuk testing:
-    # catalog_df = catalog_df.head(200)
 
     df_sp, df_yt = process_catalog(catalog_df)
 
@@ -153,7 +148,6 @@ if __name__ == "__main__":
         df_yt.to_csv("youtube_raw.csv", index=False)
         logger.info(f"✅ {len(df_yt)} rows saved to youtube_raw.csv")
 
-    # Bersihkan checkpoint jika pipeline selesai penuh
     clear_checkpoint()
 
 
